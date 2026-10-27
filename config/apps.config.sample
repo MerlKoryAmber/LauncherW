@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<apps xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <settings>
+    <launcherTitle>Корпоративные приложения</launcherTitle>
+    <background>#F5F5F7</background>
+    <fontColor>#1D2225</fontColor>
+    <showSearch>true</showSearch>
+    <hideTilePlate>false</hideTilePlate>
+    <iconSize>48</iconSize>
+    <captionLength>36</captionLength>
+    <windowWidth>840</windowWidth>
+    <windowHeight>500</windowHeight>
+  </settings>
+</apps>

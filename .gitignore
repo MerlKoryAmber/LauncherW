@@ -1,0 +1,10 @@
+*.old.exe
+*.bak
+config/apps.config
+config/apps.config.bak
+Check-LapsRead.ps1
+Check-OuComputerMove.ps1
+Launcher.v*.exe
+config/Configurator.v*.exe
+.DS_Store
+Thumbs.db
