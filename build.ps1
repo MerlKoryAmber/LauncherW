@@ -26,21 +26,46 @@ function Sign-Built([string]$path) {
     Write-Output ("signed " + (Split-Path -Leaf $path) + " " + $signed.Status + " " + $signed.SignerCertificate.Thumbprint)
 }
 function Publish-Staged([string]$fresh, [string]$dest) {
-    if (-not (Test-Path -LiteralPath $dest)) {
-        Move-Item -LiteralPath $fresh -Destination $dest
-        return
-    }
+    $temp = $fresh + '.publish'
+    Copy-Item -LiteralPath $fresh -Destination $temp -Force
     try {
-        [System.IO.File]::Replace($fresh, $dest, $null)
-        return
-    } catch {
-        $old = [System.IO.Path]::ChangeExtension($dest, '.old.exe')
-        if (Test-Path -LiteralPath $old) {
-            try { Remove-Item -LiteralPath $old -Force } catch { }
+        if (-not (Test-Path -LiteralPath $dest)) {
+            Move-Item -LiteralPath $temp -Destination $dest
+        } else {
+            try {
+                [System.IO.File]::Replace($temp, $dest, $null)
+            } catch {
+                $old = [System.IO.Path]::ChangeExtension($dest, '.old.exe')
+                if (Test-Path -LiteralPath $old) {
+                    try { Remove-Item -LiteralPath $old -Force } catch { }
+                }
+                Rename-Item -LiteralPath $dest -NewName (Split-Path -Leaf $old)
+                Move-Item -LiteralPath $temp -Destination $dest
+            }
         }
-        Rename-Item -LiteralPath $dest -NewName (Split-Path -Leaf $old)
-        Move-Item -LiteralPath $fresh -Destination $dest
+        Remove-Item -LiteralPath $fresh -Force -ErrorAction SilentlyContinue
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
     }
+}
+function New-VersionedManifest([string]$assemblyName, [string]$version, [string]$outPath) {
+    $text = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'app.manifest') -Raw
+    $text = $text.Replace('version="1.0.0.0" name="Talk.CorporateApps"', ('version="{0}" name="{1}"' -f $version, $assemblyName))
+    Set-Content -LiteralPath $outPath -Value $text -Encoding UTF8
+}
+function New-VersionInfo([string]$title, [string]$product, [string]$originalName, [string]$version, [string]$outPath) {
+    @(
+        'using System.Reflection;'
+        ('[assembly: AssemblyTitle("{0}")]' -f $title)
+        ('[assembly: AssemblyDescription("{0}")]' -f $title)
+        ('[assembly: AssemblyCompany("Talk")]' )
+        ('[assembly: AssemblyProduct("{0}")]' -f $product)
+        ('[assembly: AssemblyCopyright("Talk")]' )
+        ('[assembly: AssemblyTrademark("{0}")]' -f $originalName)
+        ('[assembly: AssemblyVersion("{0}")]' -f $version)
+        ('[assembly: AssemblyFileVersion("{0}")]' -f $version)
+        ('[assembly: AssemblyInformationalVersion("{0}")]' -f $version)
+    ) | Set-Content -LiteralPath $outPath -Encoding UTF8
 }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (!(Test-Path -LiteralPath $compiler)) { $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
@@ -56,23 +81,34 @@ try {
         }
     }
     $stamp = 'v' + $version
+    $fileVersion = "$version.0.0.0"
+    $obj = Join-Path $PSScriptRoot 'obj'
     New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'config') | Out-Null
+    New-Item -ItemType Directory -Force -Path $obj | Out-Null
+    $launcherManifest = Join-Path $obj 'launcher.manifest'
+    $configuratorManifest = Join-Path $obj 'configurator.manifest'
+    $launcherInfo = Join-Path $obj 'launcher.version.cs'
+    $configuratorInfo = Join-Path $obj 'configurator.version.cs'
+    New-VersionedManifest 'Talk.Launcher' $fileVersion $launcherManifest
+    New-VersionedManifest 'Talk.Configurator' $fileVersion $configuratorManifest
+    New-VersionInfo ("Talk Launcher " + $stamp) ("Talk Launcher " + $stamp) ("Launcher." + $stamp + ".exe") $fileVersion $launcherInfo
+    New-VersionInfo ("Talk Configurator " + $stamp) ("Talk Configurator " + $stamp) ("Configurator." + $stamp + ".exe") $fileVersion $configuratorInfo
 
     $launcherStaged = Join-Path $PSScriptRoot ("Launcher." + $stamp + ".exe")
-    & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /win32manifest:app.manifest /win32icon:CorporateApps.ico /resource:CorporateApps.ico,CorporateApps.ico /out:$launcherStaged /r:System.Drawing.dll /r:System.Windows.Forms.dll Launcher.cs Shared.cs Theme.cs
+    & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /win32manifest:$launcherManifest /win32icon:CorporateApps.ico /resource:CorporateApps.ico,CorporateApps.ico /out:$launcherStaged /r:System.Drawing.dll /r:System.Windows.Forms.dll Launcher.cs Shared.cs Theme.cs $launcherInfo
     if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
     Publish-Staged $launcherStaged (Join-Path $PSScriptRoot 'Launcher.exe')
+    Sign-Built (Join-Path $PSScriptRoot 'Launcher.exe')
 
     $configuratorStaged = Join-Path $PSScriptRoot ("config\Configurator." + $stamp + ".exe")
-    & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /win32manifest:app.manifest /win32icon:Configurator.ico /resource:Configurator.ico,Configurator.ico /out:$configuratorStaged /r:System.Drawing.dll /r:System.Windows.Forms.dll Configurator.cs Shared.cs Theme.cs DomainPicker.cs
+    & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /win32manifest:$configuratorManifest /win32icon:Configurator.ico /resource:Configurator.ico,Configurator.ico /out:$configuratorStaged /r:System.Drawing.dll /r:System.Windows.Forms.dll Configurator.cs Shared.cs Theme.cs DomainPicker.cs $configuratorInfo
     if ($LASTEXITCODE -ne 0) { throw 'Configurator build failed.' }
     Publish-Staged $configuratorStaged (Join-Path $PSScriptRoot 'config\Configurator.exe')
+    Sign-Built (Join-Path $PSScriptRoot 'config\Configurator.exe')
 
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Configurator.ico') -Destination (Join-Path $PSScriptRoot 'config\Configurator.ico') -Force
     $stale = Join-Path $PSScriptRoot 'Configurator.exe'
     if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Force }
-    Sign-Built (Join-Path $PSScriptRoot 'Launcher.exe')
-    Sign-Built (Join-Path $PSScriptRoot 'config\Configurator.exe')
     Set-Content -LiteralPath $versionFile -Value ($version + 1) -Encoding ascii
     Write-Output ("Built " + $stamp + ". Next build is v" + ($version + 1) + ".")
 } finally { Pop-Location }

@@ -8,3 +8,5 @@ Launcher.v*.exe
 config/Configurator.v*.exe
 .DS_Store
 Thumbs.db
+
+obj/

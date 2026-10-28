@@ -34,11 +34,47 @@ public static class Theme {
 }
 public class SoftButton:Button {
  public bool Primary{get;set;} bool hover,down;
- public SoftButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);Cursor=Cursors.Hand;}
+ public SoftButton(){
+  SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.SupportsTransparentBackColor|ControlStyles.ResizeRedraw,true);
+  SetStyle(ControlStyles.Opaque,false);
+  FlatStyle=FlatStyle.Flat; FlatAppearance.BorderSize=0; FlatAppearance.MouseDownBackColor=Color.Transparent; FlatAppearance.MouseOverBackColor=Color.Transparent;
+  BackColor=Color.Transparent; Cursor=Cursors.Hand;
+ }
+ protected override void OnSizeChanged(EventArgs e){base.OnSizeChanged(e);ApplyRoundRegion();}
+ protected override void OnHandleCreated(EventArgs e){base.OnHandleCreated(e);ApplyRoundRegion();}
+ void ApplyRoundRegion(){
+  if(!IsHandleCreated||Width<12||Height<12)return;
+  using(var path=Theme.Round(new Rectangle(0,0,Width,Height),10)){
+   var next=new Region(path);
+   if(Region!=null)Region.Dispose();
+   Region=next;
+  }
+ }
+ protected override bool ShowFocusCues{get{return false;}}
  protected override void OnMouseEnter(EventArgs e){hover=true;Invalidate();base.OnMouseEnter(e);} protected override void OnMouseLeave(EventArgs e){hover=false;down=false;Invalidate();base.OnMouseLeave(e);}
  protected override void OnMouseDown(MouseEventArgs e){down=true;Invalidate();base.OnMouseDown(e);} protected override void OnMouseUp(MouseEventArgs e){down=false;Invalidate();base.OnMouseUp(e);}
  protected override void OnGotFocus(EventArgs e){base.OnGotFocus(e);Invalidate();} protected override void OnLostFocus(EventArgs e){base.OnLostFocus(e);Invalidate();}
  protected virtual void PaintCaption(Graphics g){TextRenderer.DrawText(g,Text,Font,new Rectangle(8,2,Width-16,Height-5),!Enabled?Theme.Muted:Primary?Color.White:Theme.Ink,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);}
- protected override void OnPaint(PaintEventArgs e){e.Graphics.Clear(Parent==null?Theme.Background:Parent.BackColor);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;Color fill=Primary?Theme.Brand:Color.White;if(hover)fill=Primary?Color.FromArgb(0,113,134):Color.FromArgb(237,245,246);if(down)fill=Primary?Color.FromArgb(0,98,116):Color.FromArgb(224,234,237);if(!Enabled)fill=Color.FromArgb(231,234,236);using(var p=Theme.Round(new Rectangle(2,2,Width-5,Height-5),10))using(var b=new SolidBrush(fill))using(var pen=new Pen(Focused?Theme.Brand:Primary?fill:Color.FromArgb(206,216,219),Focused?2:1)){e.Graphics.FillPath(b,p);e.Graphics.DrawPath(pen,p);}PaintCaption(e.Graphics);}
+ protected void PaintParentBackground(Graphics g){
+  if(Parent==null){g.Clear(Theme.Background);return;}
+  var state=g.Save();
+  try{g.TranslateTransform(-Left,-Top);InvokePaintBackground(Parent,new PaintEventArgs(g,new Rectangle(Left,Top,Width,Height)));}
+  finally{g.Restore(state);}
+ }
+ protected override void OnPaintBackground(PaintEventArgs e){PaintParentBackground(e.Graphics);}
+ protected override void OnPaint(PaintEventArgs e){
+  PaintParentBackground(e.Graphics);
+  e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+  Color fill=Primary?Theme.Brand:Color.White;
+  if(hover)fill=Primary?Color.FromArgb(0,113,134):Color.FromArgb(237,245,246);
+  if(down)fill=Primary?Color.FromArgb(0,98,116):Color.FromArgb(224,234,237);
+  if(!Enabled)fill=Color.FromArgb(231,234,236);
+  var box=new Rectangle(1,1,Math.Max(1,Width-3),Math.Max(1,Height-3));
+  using(var p=Theme.Round(box,10))
+  using(var b=new SolidBrush(fill))
+  using(var pen=new Pen(Focused?Theme.Brand:Primary?fill:Color.FromArgb(206,216,219),Focused?2:1))
+  {e.Graphics.FillPath(b,p);e.Graphics.DrawPath(pen,p);}
+  PaintCaption(e.Graphics);
+ }
 }
 

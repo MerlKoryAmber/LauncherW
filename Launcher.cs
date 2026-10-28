@@ -305,27 +305,8 @@ public class AppTile : SoftButton
             base.OnPaint(e);
             return;
         }
-        PaintUnderlay(e.Graphics);
+        PaintParentBackground(e.Graphics);
         PaintCaption(e.Graphics);
-    }
-
-    void PaintUnderlay(Graphics g)
-    {
-        if (Parent == null)
-        {
-            g.Clear(Theme.Background);
-            return;
-        }
-        var state = g.Save();
-        try
-        {
-            g.TranslateTransform(-Left, -Top);
-            InvokePaintBackground(Parent, new PaintEventArgs(g, new Rectangle(Left, Top, Width, Height)));
-        }
-        finally
-        {
-            g.Restore(state);
-        }
     }
 
     protected override void PaintCaption(Graphics g)
